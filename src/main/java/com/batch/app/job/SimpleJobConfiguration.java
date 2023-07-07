@@ -6,6 +6,7 @@ import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
+import org.springframework.batch.core.configuration.annotation.JobScope;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.configuration.support.DefaultBatchConfiguration;
@@ -15,6 +16,7 @@ import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.repeat.RepeatStatus;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseBuilder;
@@ -34,15 +36,14 @@ public class SimpleJobConfiguration {
 
     private final PlatformTransactionManager transactionManager;
 
-    private final TestTasklet tasklet;
-
     /**
      * Batch Job 생성
      */
     @Bean
     public Job simpleJob() {
         return new JobBuilder("simpleJob", jobRepository)
-                .start(simpleStep1())
+                .start(simpleStep1(null))
+                .next(simpleStep2(null))
                 .build();
     }
 
@@ -50,22 +51,27 @@ public class SimpleJobConfiguration {
      * Batch Step 생성
      */
     @Bean
-    public Step simpleStep1() {
+    @JobScope
+    public Step simpleStep1(@Value("#{jobParameters[requestDate]}") String requestDate) {
         return new StepBuilder("simpleStep1", jobRepository)
-                .tasklet(tasklet, transactionManager)
+                .tasklet((contribution, chunkContext) -> {
+                    log.info(">>>>>> This is Step1");
+
+                    return RepeatStatus.FINISHED;
+//                    throw new IllegalArgumentException("step1에서 실패합니다.");
+                }, transactionManager)
                 .build();
     }
 
-    @StepScope
-    @Component
-    public class TestTasklet implements Tasklet {
+    @Bean
+    @JobScope
+    public Step simpleStep2(@Value("#{jobParameters[requestDate]}") String requestDate) {
+        return new StepBuilder("simpleStep2", jobRepository)
+                .tasklet((contribution, chunkContext) -> {
+                    log.info(">>>>>> This is Step2");
 
-        @Override
-        public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
-            log.info(">>>>>> This is Step1");
-
-            return RepeatStatus.FINISHED;
-        }
-
+                    return RepeatStatus.FINISHED;
+                }, transactionManager)
+                .build();
     }
 }
